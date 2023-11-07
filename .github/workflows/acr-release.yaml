@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to write releases
+      id-token: write # needed for keyless signing
+      packages: write # needed for ghcr access
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sigstore/cosign-installer@v3
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.3
+      - name: Login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      - name: Prepare
+        id: prep
+        run: |
+          VERSION=sha-${GITHUB_SHA::8}
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF/refs\/tags\//}
+          fi
+          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "REVISION=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+      - name: Publish Helm chart to ACR
+        run: |
+          helm package charts/podinfo
+          helm push podinfo-${{ steps.prep.outputs.VERSION }}.tgz oci://fluxkubecon.azurecr.io/charts/
+          rm podinfo-${{ steps.prep.outputs.VERSION }}.tgz
+      - name: Sign Helm chart
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          cosign sign ghcr.io/stefanprodan/charts/podinfo:${{ steps.prep.outputs.VERSION }} --yes
