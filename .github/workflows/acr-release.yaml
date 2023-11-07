@@ -47,4 +47,4 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
-          cosign sign ghcr.io/stefanprodan/charts/podinfo:${{ steps.prep.outputs.VERSION }} --yes
+          cosign sign fluxkubecon.azurecr.io/charts/podinfo:${{ steps.prep.outputs.VERSION }} --yes
